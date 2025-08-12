@@ -36,7 +36,7 @@
 
 ## 插件截图
 
-![插件截图](/image/show.png)
+![插件截图](/image/Translator.png)
 
 ## 常见问题（FAQ）
 - 首次使用提示需要下载模型？
