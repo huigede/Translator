@@ -11,6 +11,9 @@ const translateBtn = document.getElementById("translateBtn");
 const swapBtn = document.getElementById("swapBtn");
 const copyBtn = document.getElementById("copyBtn");
 const speakBtn = document.getElementById("speakBtn");
+const autoToggle = document.getElementById("autoToggle");
+const manualPageBtn = document.getElementById("manualPageBtn");
+const restorePageBtn = document.getElementById("restorePageBtn");
 
 
 const downloadSection = document.getElementById("downloadSection");
@@ -462,6 +465,66 @@ swapBtn?.addEventListener("click", () => {
   updateHints();
 });
 
+// 初始化：加载设置并同步 UI
+(async () => {
+  try {
+    const s = await chrome.storage.sync.get(['autoTranslateEnabled', 'autoTranslateTargetLang']);
+    if (autoToggle) autoToggle.checked = !!s.autoTranslateEnabled;
+    if (s.autoTranslateTargetLang) targetSelect.value = s.autoTranslateTargetLang;
+  } catch {}
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) {
+      try {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["contentScript.js"] });
+      } catch {}
+    }
+  } catch {}
+})();
+
+// 自动翻译开关：持久化并提示
+autoToggle?.addEventListener('change', async (e) => {
+  const enabled = !!e.target.checked;
+  await chrome.storage.sync.set({ autoTranslateEnabled: enabled, autoTranslateTargetLang: targetSelect.value });
+  setStatus(enabled ? '已开启：自动翻译网页' : '已关闭：自动翻译网页', enabled ? 'ok' : '');
+});
+
+// 手动：翻译当前网页
+manualPageBtn?.addEventListener('click', async () => {
+  try {
+    await chrome.storage.sync.set({ autoTranslateTargetLang: targetSelect.value });
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["contentScript.js"] });
+    await chrome.tabs.sendMessage(tab.id, { type: 'START_PAGE_TRANSLATION', targetLang: targetSelect.value });
+    setStatus('已翻译当前网页', 'ok');
+  } catch (e) {
+    setStatus('网页翻译失败：' + String(e?.message || e || ''), 'err');
+  }
+});
+
+// 手动：恢复原状
+restorePageBtn?.addEventListener('click', async () => {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    await chrome.tabs.sendMessage(tab.id, { type: 'STOP_PAGE_TRANSLATION' });
+    setStatus('已恢复原状', '');
+  } catch (e) {
+    setStatus('恢复失败：' + String(e?.message || e || ''), 'err');
+  }
+});
+
+// 当目标语言改变时，保存设置；若页面已翻译可实时切换
+targetSelect?.addEventListener('change', async () => {
+  await chrome.storage.sync.set({ autoTranslateTargetLang: targetSelect.value });
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) return;
+    await chrome.tabs.sendMessage(tab.id, { type: 'START_PAGE_TRANSLATION', targetLang: targetSelect.value });
+  } catch {}
+});
 
 // Optional: update availability hint when selects change
 async function updateHints() {

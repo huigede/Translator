@@ -85,7 +85,16 @@
       </div>
       <textarea id="inputText" placeholder="输入需要翻译的文本..."></textarea>
 
-      <button id="translateBtn" class="btn primary">开始翻译</button>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button id="translateBtn" class="btn primary" style="flex:1;">开始翻译</button>
+        <div style="display:flex;align-items:center;gap:6px; white-space:nowrap;">
+          <label class="small" style="display:flex;align-items:center;gap:6px;">
+            <input id="autoToggle" type="checkbox" /> 自动翻译网页
+          </label>
+          <button id="manualPageBtn" class="btn" style="width:auto;">翻译当前网页</button>
+          <button id="restorePageBtn" class="btn" style="width:auto;">恢复原状</button>
+        </div>
+      </div>
 
       <div class="hint small" id="status"></div>
 
