@@ -54,3 +54,13 @@ Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+## 隐私政策
+
+Translator 是开源软件。我们尊重您的隐私权。我们不会采集您的任何数据，所有数据均在您的本地进行使用，不会将您的数据提供给任何人。
+
+当然，您不必听信我们的一家之言。您可以通过阅读源代码来了解 Translator(https://github.com/AnYi-0/Translator/) 的具体行为，或者咨询该方面的专业人士。
+
+Translator is open source software. We respect your privacy rights. We will not collect any data from you, all data will be used locally, and your data will not be provided to anyone.
+
+Of course, you don't have to listen to our family. You can read the source code to learn about the specific behavior of Translator(https://github.com/AnYi-0/Translator/), or consult a professional in the field.
