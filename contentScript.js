@@ -1,12 +1,29 @@
 // contentScript.js - Translate page text in-place using Chrome Translator API, preserving layout
 
 (() => {
-  // State
+  // Check if this script has already been loaded to prevent multiple instances
+  if (window.translatorContentScriptLoaded) {
+    console.log('Translator content script already loaded, skipping...');
+    return;
+  }
+  window.translatorContentScriptLoaded = true;
+
+  // State for page translation
   let enabled = false;
   let translator = null;
   let currentTargetLang = 'zh-Hans';
   const originalText = new Map(); // Text node -> original string (Map so we can iterate/restore)
   let observer = null;
+
+  // State for selection translation
+  let selectionTranslator = null;
+  let selectionSourceLang = null;
+  let selectionTargetLang = 'zh-Hans';
+  let translationTooltip = null;
+  let selectionTimeout = null;
+  let isTranslatingSelection = false;
+  let lastTranslatedText = null; // Track last translated text to avoid duplicates
+  let isInitialized = false; // Prevent multiple initializations
 
   // Simple inline overlay for status/progress
   let overlayEl = null;
@@ -35,6 +52,221 @@
   function hideOverlay() {
     if (overlayEl) overlayEl.remove();
     overlayEl = null;
+  }
+
+  // Translation tooltip for selected text
+  function createTranslationTooltip() {
+    const tooltip = document.createElement('div');
+    tooltip.style.cssText = [
+      'position:absolute',
+      'z-index:2147483647',
+      'background:#1f2937',
+      'color:#fff',
+      'padding:8px 12px',
+      'border-radius:8px',
+      'font:13px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif',
+      'box-shadow:0 4px 12px rgba(0,0,0,0.3)',
+      'max-width:300px',
+      'word-wrap:break-word',
+      'opacity:0',
+      'transform:translateY(4px)',
+      'transition:opacity 0.2s ease, transform 0.2s ease',
+      'pointer-events:auto',
+      'border:1px solid rgba(255,255,255,0.1)',
+      'display:flex',
+      'flex-direction:column',
+      'gap:6px'
+    ].join(';');
+
+    // Translation text container
+    const textContainer = document.createElement('div');
+    textContainer.style.cssText = [
+      'flex:1',
+      'word-wrap:break-word'
+    ].join(';');
+
+    // Copy button
+    const copyButton = document.createElement('button');
+    copyButton.textContent = '复制';
+    copyButton.style.cssText = [
+      'background:#374151',
+      'color:#fff',
+      'border:1px solid rgba(255,255,255,0.2)',
+      'border-radius:4px',
+      'padding:4px 8px',
+      'font-size:11px',
+      'cursor:pointer',
+      'transition:background 0.2s ease',
+      'align-self:flex-end'
+    ].join(';');
+
+    // Copy button hover effect
+    copyButton.addEventListener('mouseenter', () => {
+      copyButton.style.background = '#4b5563';
+    });
+    copyButton.addEventListener('mouseleave', () => {
+      copyButton.style.background = '#374151';
+    });
+
+    // Copy functionality
+    copyButton.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const textToCopy = textContainer.textContent;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(textToCopy);
+        } else {
+          // Fallback for older browsers
+          const textArea = document.createElement('textarea');
+          textArea.value = textToCopy;
+          textArea.style.position = 'fixed';
+          textArea.style.opacity = '0';
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+        }
+
+        // Visual feedback
+        const originalText = copyButton.textContent;
+        copyButton.textContent = '已复制';
+        copyButton.style.background = '#10b981';
+        setTimeout(() => {
+          copyButton.textContent = originalText;
+          copyButton.style.background = '#374151';
+        }, 1000);
+      } catch (err) {
+        console.warn('复制失败:', err);
+        copyButton.textContent = '复制失败';
+        copyButton.style.background = '#ef4444';
+        setTimeout(() => {
+          copyButton.textContent = '复制';
+          copyButton.style.background = '#374151';
+        }, 1000);
+      }
+    });
+
+    tooltip.appendChild(textContainer);
+    tooltip.appendChild(copyButton);
+
+    // Add arrow pointing down
+    const arrow = document.createElement('div');
+    arrow.style.cssText = [
+      'position:absolute',
+      'bottom:-6px',
+      'left:50%',
+      'transform:translateX(-50%)',
+      'width:0',
+      'height:0',
+      'border-left:6px solid transparent',
+      'border-right:6px solid transparent',
+      'border-top:6px solid #1f2937'
+    ].join(';');
+    tooltip.appendChild(arrow);
+
+    // Store references for easy access
+    tooltip._textContainer = textContainer;
+    tooltip._copyButton = copyButton;
+
+    return tooltip;
+  }
+
+  function showTranslationTooltip(text, x, y) {
+    hideTranslationTooltip();
+
+    const tooltip = createTranslationTooltip();
+    tooltip._textContainer.textContent = text;
+    document.body.appendChild(tooltip);
+
+    // Position tooltip above the selection
+    const rect = tooltip.getBoundingClientRect();
+    const finalX = Math.max(10, Math.min(x - rect.width / 2, window.innerWidth - rect.width - 10));
+    const finalY = Math.max(10, y - rect.height - 10);
+
+    tooltip.style.left = finalX + 'px';
+    tooltip.style.top = finalY + 'px';
+
+    // Set global reference after positioning
+    translationTooltip = tooltip;
+
+    // Animate in
+    requestAnimationFrame(() => {
+      if (tooltip && tooltip.parentNode) {
+        tooltip.style.opacity = '1';
+        tooltip.style.transform = 'translateY(0)';
+      }
+    });
+  }
+
+  function showLoadingTooltip(x, y) {
+    hideTranslationTooltip();
+
+    const tooltip = createTranslationTooltip();
+    tooltip._textContainer.textContent = '翻译中...';
+    tooltip.style.background = '#374151';
+    tooltip._copyButton.style.display = 'none'; // Hide copy button during loading
+    document.body.appendChild(tooltip);
+
+    // Position tooltip
+    const rect = tooltip.getBoundingClientRect();
+    const finalX = Math.max(10, Math.min(x - rect.width / 2, window.innerWidth - rect.width - 10));
+    const finalY = Math.max(10, y - rect.height - 10);
+
+    tooltip.style.left = finalX + 'px';
+    tooltip.style.top = finalY + 'px';
+
+    // Set global reference after positioning
+    translationTooltip = tooltip;
+
+    // Animate in
+    requestAnimationFrame(() => {
+      if (tooltip && tooltip.parentNode) {
+        tooltip.style.opacity = '1';
+        tooltip.style.transform = 'translateY(0)';
+      }
+    });
+  }
+
+  function showErrorTooltip(message, x, y) {
+    hideTranslationTooltip();
+
+    const tooltip = createTranslationTooltip();
+    tooltip._textContainer.textContent = message;
+    tooltip.style.background = '#dc2626'; // Red background for errors
+    tooltip._copyButton.style.display = 'none'; // Hide copy button for errors
+    document.body.appendChild(tooltip);
+
+    // Position tooltip
+    const rect = tooltip.getBoundingClientRect();
+    const finalX = Math.max(10, Math.min(x - rect.width / 2, window.innerWidth - rect.width - 10));
+    const finalY = Math.max(10, y - rect.height - 10);
+
+    tooltip.style.left = finalX + 'px';
+    tooltip.style.top = finalY + 'px';
+
+    // Set global reference after positioning
+    translationTooltip = tooltip;
+
+    // Animate in
+    requestAnimationFrame(() => {
+      if (tooltip && tooltip.parentNode) {
+        tooltip.style.opacity = '1';
+        tooltip.style.transform = 'translateY(0)';
+      }
+    });
+  }
+
+  function hideTranslationTooltip() {
+    if (translationTooltip) {
+      try {
+        if (translationTooltip.parentNode) {
+          translationTooltip.remove();
+        }
+      } catch (e) {
+        console.warn('Error removing translation tooltip:', e);
+      }
+      translationTooltip = null;
+    }
   }
 
   const EXCLUDED = new Set(['SCRIPT','STYLE','NOSCRIPT','IFRAME','CANVAS','SVG','CODE','PRE','TEXTAREA','INPUT','BUTTON','SELECT']);
@@ -75,6 +307,17 @@
     return code;
   }
 
+  // Get next target language when source and target are the same
+  function getNextTargetLanguage(currentLang) {
+    const languages = ['zh-Hans', 'en', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'it', 'pt', 'zh-Hant'];
+    const currentIndex = languages.indexOf(currentLang);
+    if (currentIndex === -1) {
+      return 'zh-Hans'; // Default fallback
+    }
+    // Return next language in the list, wrap around to beginning if at end
+    return languages[(currentIndex + 1) % languages.length];
+  }
+
   async function detectSourceLanguage() {
     try {
       if (typeof window.LanguageDetector === 'undefined') return null;
@@ -92,6 +335,27 @@
     return null;
   }
 
+  // Detect language for selected text
+  async function detectTextLanguage(text) {
+    try {
+      if (!isTranslatorAPIAvailable()) return null;
+      if (!text || text.trim().length < 3) return null;
+
+      const detector = await window.LanguageDetector.create({
+        expectedInputLanguages: ['en','zh-Hans','zh-Hant','ja','ko','fr','de','es','ru','it','pt']
+      });
+      const results = await detector.detect(text);
+      detector.destroy?.();
+
+      if (Array.isArray(results) && results.length > 0) {
+        return results[0].detectedLanguage || null;
+      }
+    } catch (e) {
+      console.warn('Language detection failed:', e);
+    }
+    return null;
+  }
+
   async function ensureTranslator(sourceLang, targetLang) {
     if (translator && currentTargetLang === targetLang) return translator;
     if (typeof window.Translator === 'undefined') {
@@ -105,6 +369,107 @@
     translator = await window.Translator.create({ sourceLanguage: src, targetLanguage: tgt });
     currentTargetLang = tgt;
     return translator;
+  }
+
+  // Check if Translator API is available
+  function isTranslatorAPIAvailable() {
+    return typeof window.Translator !== 'undefined' &&
+           typeof window.LanguageDetector !== 'undefined' &&
+           window.isSecureContext;
+  }
+
+  // Ensure translator for selection translation
+  async function ensureSelectionTranslator(sourceLang, targetLang) {
+    const src = normalizeLang(sourceLang || 'en');
+    const tgt = normalizeLang(targetLang || 'en');
+
+    // Check if we can reuse the existing translator
+    if (selectionTranslator && selectionSourceLang === src && selectionTargetLang === tgt) {
+      return selectionTranslator;
+    }
+
+    if (!isTranslatorAPIAvailable()) {
+      throw new Error('TRANSLATOR_API_NOT_AVAILABLE');
+    }
+
+    // Destroy existing translator if any
+    if (selectionTranslator) {
+      try { selectionTranslator.destroy?.(); } catch {}
+    }
+
+    console.log(`Creating new translator: ${src} -> ${tgt}`);
+    selectionTranslator = await window.Translator.create({ sourceLanguage: src, targetLanguage: tgt });
+    selectionSourceLang = src;
+    selectionTargetLang = tgt;
+    return selectionTranslator;
+  }
+
+  // Translate selected text with automatic fallback for unsupported language pairs
+  async function translateSelectedText(text, sourceLang, targetLang, maxRetries = 3) {
+    let currentTargetLang = targetLang;
+    let retryCount = 0;
+
+    while (retryCount < maxRetries) {
+      try {
+        // Skip if source and target are the same
+        if (sourceLang === currentTargetLang) {
+          currentTargetLang = getNextTargetLanguage(currentTargetLang);
+          console.log(`Source equals target (${sourceLang}), switching to ${currentTargetLang}`);
+          continue;
+        }
+
+        const translator = await ensureSelectionTranslator(sourceLang, currentTargetLang);
+        const translation = await translator.translate(text);
+
+        // If we had to switch languages, log it
+        if (currentTargetLang !== targetLang) {
+          console.log(`Successfully translated using fallback language: ${sourceLang} -> ${currentTargetLang}`);
+        }
+
+        return translation;
+      } catch (e) {
+        console.warn(`Translation failed (${sourceLang} -> ${currentTargetLang}):`, e);
+
+        // Handle specific error types
+        if (e.message === 'TRANSLATOR_API_NOT_AVAILABLE') {
+          throw new Error('API_NOT_AVAILABLE');
+        }
+
+        // Check if it's an unsupported language pair error
+        const isUnsupportedPair = e.message?.includes('language pair is unsupported') ||
+                                 e.message?.includes('Unable to create translator') ||
+                                 e.name === 'NotSupportedError';
+
+        if (isUnsupportedPair && retryCount < maxRetries - 1) {
+          // Try next target language
+          const nextLang = getNextTargetLanguage(currentTargetLang);
+          console.log(`Language pair ${sourceLang}->${currentTargetLang} unsupported, trying ${sourceLang}->${nextLang}`);
+          currentTargetLang = nextLang;
+          retryCount++;
+
+          // Clear the failed translator
+          if (selectionTranslator) {
+            try { selectionTranslator.destroy?.(); } catch {}
+            selectionTranslator = null;
+            selectionSourceLang = null;
+            selectionTargetLang = null;
+          }
+
+          continue;
+        }
+
+        // Handle other DOMException and API errors
+        if (e instanceof DOMException || e.name === 'DOMException') {
+          throw new Error('API_ERROR');
+        }
+
+        // If we've exhausted retries or it's not a language pair issue, throw the error
+        throw e;
+      }
+    }
+
+    // If we get here, all retries failed
+    throw new Error(`Failed to translate after ${maxRetries} attempts with different target languages`);
   }
 
   async function translateTextNodes(targetLang) {
@@ -197,6 +562,204 @@
     translator = null;
   }
 
+  // Handle text selection for translation
+  async function handleTextSelection() {
+    const timestamp = Date.now();
+
+    if (isTranslatingSelection) {
+      console.log(`[${timestamp}] Translation already in progress, skipping...`);
+      return;
+    }
+
+    // Check if API is available first
+    if (!isTranslatorAPIAvailable()) {
+      return; // Silently skip if API is not available
+    }
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      hideTranslationTooltip();
+      lastTranslatedText = null;
+      return;
+    }
+
+    const selectedText = selection.toString().trim();
+    if (!selectedText || selectedText.length < 2) {
+      hideTranslationTooltip();
+      lastTranslatedText = null;
+      return;
+    }
+
+    // Skip if this is the same text we just translated
+    if (selectedText === lastTranslatedText) {
+      console.log(`[${timestamp}] Same text as last translation, skipping...`);
+      return;
+    }
+
+    // Skip if text is too long (avoid translating entire paragraphs accidentally)
+    if (selectedText.length > 500) {
+      hideTranslationTooltip();
+      return;
+    }
+
+    // Skip if text contains mostly numbers or special characters
+    if (!/[a-zA-Z\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]/.test(selectedText)) {
+      hideTranslationTooltip();
+      return;
+    }
+
+    // Global lock to prevent multiple instances from translating simultaneously
+    if (window.translatorGlobalLock) {
+      console.log(`[${timestamp}] Global translation lock active, skipping...`);
+      return;
+    }
+    window.translatorGlobalLock = true;
+
+    // Get selection position for tooltip placement
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const topY = rect.top + window.scrollY; // Add scroll offset for correct positioning
+
+    isTranslatingSelection = true;
+
+    try {
+      // Show loading indicator
+      showLoadingTooltip(centerX, topY);
+
+      // Get target language from storage or use default
+      let targetLang = 'en'; // Default to English instead of Chinese
+      try {
+        const result = await chrome.storage.sync.get(['autoTranslateTargetLang']);
+        if (result.autoTranslateTargetLang) {
+          targetLang = result.autoTranslateTargetLang;
+        }
+      } catch (e) {
+        // Use default if storage access fails
+        console.warn('Failed to get target language from storage, using default:', e);
+      }
+
+      // Detect source language
+      const detectedLang = await detectTextLanguage(selectedText);
+      const sourceLang = detectedLang || 'en';
+
+      console.log(`[${timestamp}] Translating: "${selectedText}" (${sourceLang} -> ${targetLang})`);
+
+      // Translate the text (with automatic fallback for unsupported language pairs)
+      const translation = await translateSelectedText(selectedText, sourceLang, targetLang);
+
+      if (translation && translation !== selectedText) {
+        // Store the translated text to avoid duplicates
+        lastTranslatedText = selectedText;
+
+        // Show translation tooltip
+        showTranslationTooltip(translation, centerX, topY);
+        // Make sure copy button is visible
+        if (translationTooltip && translationTooltip._copyButton) {
+          translationTooltip._copyButton.style.display = 'block';
+          translationTooltip.style.background = '#1f2937'; // Reset background color
+        }
+
+        console.log(`[${timestamp}] Translation completed: "${selectedText}" -> "${translation}"`);
+      } else {
+        hideTranslationTooltip();
+        lastTranslatedText = null;
+      }
+    } catch (e) {
+      console.warn(`[${timestamp}] Selection translation failed:`, e);
+
+      // Show user-friendly error message for unsupported language pairs
+      if (e.message?.includes('Failed to translate after') ||
+          e.message?.includes('language pair is unsupported')) {
+        showErrorTooltip('该语言对不支持翻译', centerX, topY);
+        setTimeout(hideTranslationTooltip, 3000); // Auto-hide after 3 seconds
+      } else {
+        hideTranslationTooltip();
+      }
+
+      lastTranslatedText = null;
+    } finally {
+      isTranslatingSelection = false;
+      window.translatorGlobalLock = false; // Release global lock
+    }
+  }
+
+  // Debounced selection handler
+  function onSelectionChange() {
+    if (selectionTimeout) {
+      clearTimeout(selectionTimeout);
+    }
+
+    selectionTimeout = setTimeout(() => {
+      handleTextSelection();
+    }, 500); // Increased debounce to 500ms to reduce duplicate triggers
+  }
+
+  // Initialize selection translation
+  function initSelectionTranslation() {
+    // Prevent multiple initializations
+    if (isInitialized) {
+      console.log('Selection translation already initialized, skipping...');
+      return;
+    }
+
+    // Check if we should enable selection translation
+    if (!isTranslatorAPIAvailable()) {
+      console.info('Translator API not available on this page. Selection translation disabled.');
+      return;
+    }
+
+    console.info('Translator API available. Selection translation enabled.');
+
+    // Listen for selection changes
+    document.addEventListener('selectionchange', onSelectionChange);
+
+    // Hide tooltip when clicking elsewhere
+    document.addEventListener('click', (e) => {
+      // Small delay to allow new selection to be processed
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || !selection.toString().trim()) {
+          hideTranslationTooltip();
+          lastTranslatedText = null; // Reset when clearing selection
+        }
+      }, 100);
+    });
+
+    // Hide tooltip on scroll
+    document.addEventListener('scroll', () => {
+      hideTranslationTooltip();
+      lastTranslatedText = null; // Reset when scrolling
+    }, { passive: true });
+
+    // Hide tooltip on window resize
+    window.addEventListener('resize', () => {
+      hideTranslationTooltip();
+      lastTranslatedText = null; // Reset when resizing
+    });
+
+    isInitialized = true;
+    console.log('Selection translation initialized successfully');
+  }
+
+  // Cleanup selection translation
+  function cleanupSelectionTranslation() {
+    document.removeEventListener('selectionchange', onSelectionChange);
+    hideTranslationTooltip();
+    if (selectionTimeout) {
+      clearTimeout(selectionTimeout);
+      selectionTimeout = null;
+    }
+    try { selectionTranslator?.destroy?.(); } catch {}
+    selectionTranslator = null;
+    selectionSourceLang = null;
+    selectionTargetLang = null;
+    lastTranslatedText = null;
+    isInitialized = false;
+    window.translatorGlobalLock = false; // Release global lock
+    console.log('Selection translation cleaned up');
+  }
+
   // Messaging
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     (async () => {
@@ -237,6 +800,11 @@
           sendResponse({ ok: true, enabled, targetLang: currentTargetLang });
           return;
         }
+        if (msg && msg.type === 'TOGGLE_SELECTION_TRANSLATION') {
+          // This could be used to enable/disable selection translation
+          sendResponse({ ok: true });
+          return;
+        }
       } catch (e) {
         showOverlay(String(e?.message || e || 'Error'));
         setTimeout(hideOverlay, 2000);
@@ -245,6 +813,20 @@
       }
     })();
     return true; // keep channel open for async
+  });
+
+  // Initialize selection translation when script loads
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSelectionTranslation);
+  } else {
+    initSelectionTranslation();
+  }
+
+  // Cleanup when page unloads
+  window.addEventListener('beforeunload', () => {
+    cleanupSelectionTranslation();
+    try { translator?.destroy?.(); } catch {}
+    try { selectionTranslator?.destroy?.(); } catch {}
   });
 })();
 

@@ -516,14 +516,29 @@ restorePageBtn?.addEventListener('click', async () => {
   }
 });
 
-// 当目标语言改变时，保存设置；若页面已翻译可实时切换
+// 当目标语言改变时，保存设置；只有在自动翻译开启且页面已翻译时才实时切换
 targetSelect?.addEventListener('change', async () => {
   await chrome.storage.sync.set({ autoTranslateTargetLang: targetSelect.value });
+
+  // 只有在自动翻译开启时才自动翻译页面
   try {
+    const settings = await chrome.storage.sync.get(['autoTranslateEnabled']);
+    if (!settings.autoTranslateEnabled) {
+      return; // 自动翻译未开启，不执行翻译
+    }
+
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return;
-    await chrome.tabs.sendMessage(tab.id, { type: 'START_PAGE_TRANSLATION', targetLang: targetSelect.value });
-  } catch {}
+
+    // 检查页面是否已经在翻译状态
+    const response = await chrome.tabs.sendMessage(tab.id, { type: 'QUERY_STATUS' });
+    if (response?.enabled) {
+      // 页面已翻译，切换目标语言
+      await chrome.tabs.sendMessage(tab.id, { type: 'START_PAGE_TRANSLATION', targetLang: targetSelect.value });
+    }
+  } catch (e) {
+    // 忽略错误（可能是页面不支持或其他原因）
+  }
 });
 
 // Optional: update availability hint when selects change
